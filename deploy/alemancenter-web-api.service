@@ -1,0 +1,27 @@
+[Unit]
+# Node API layer for the alemancenter.com frontend:
+#  - injects the secret X-Frontend-Key into upstream calls
+#  - manages the httpOnly refresh-token cookie (/api/auth/*)
+#  - optimizes images (/api/img via sharp)
+#  - reverse-proxies everything else to https://api.alemancenter.com
+# The static SPA is served by the web server; only /api/* reaches this service.
+Description=Alemancenter Web API (frontend proxy / auth / image)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Use the domain's Plesk system user (find it in Plesk → Subscriptions → alemancenter.com).
+User=REPLACE_PLESK_SYSTEM_USER
+WorkingDirectory=/var/www/vhosts/alemancenter.com/api-server
+EnvironmentFile=/var/www/vhosts/alemancenter.com/api-server/.env
+ExecStart=/usr/bin/node --enable-source-maps dist/index.mjs
+Restart=always
+RestartSec=3
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

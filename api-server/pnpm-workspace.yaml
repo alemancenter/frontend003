@@ -1,0 +1,6 @@
+packages:
+  - "."
+
+catalog:
+  "@types/node": "^22.10.0"
+  "zod": "^3.23.8"

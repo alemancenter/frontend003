@@ -1,0 +1,18 @@
+# Dependencies & build output (rebuilt on deploy)
+node_modules/
+dist/
+release/
+*.tar.gz
+
+# Secrets & local env — NEVER commit. Only *.env.example templates are tracked.
+.env
+.env.local
+.env.*
+!.env.example
+!*.env.example
+
+# Misc
+.DS_Store
+*.log
+.vite/
+.turbo/

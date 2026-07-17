@@ -1,0 +1,23 @@
+packages:
+  - "."
+
+catalog:
+  "@replit/vite-plugin-cartographer": "*"
+  "@replit/vite-plugin-dev-banner": "*"
+  "@replit/vite-plugin-runtime-error-modal": "*"
+  "@tailwindcss/vite": "*"
+  "@tanstack/react-query": "*"
+  "@types/node": "*"
+  "@types/react": "^18.3.12"
+  "@types/react-dom": "^18.3.1"
+  "@vitejs/plugin-react": "^4.3.4"
+  "class-variance-authority": "*"
+  "clsx": "*"
+  "framer-motion": "*"
+  "lucide-react": "*"
+  "react": "^18.3.1"
+  "react-dom": "^18.3.1"
+  "tailwind-merge": "*"
+  "tailwindcss": "^4"
+  "vite": "^6.3.6"
+  "zod": "*"

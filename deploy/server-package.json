@@ -1,0 +1,12 @@
+{
+  "name": "alemancenter-web-api",
+  "private": true,
+  "type": "module",
+  "description": "Runtime deps for the bundled api-server. Only sharp is native and must be installed on the server; every other dependency is already bundled into dist/index.mjs by esbuild.",
+  "scripts": {
+    "start": "node --enable-source-maps dist/index.mjs"
+  },
+  "dependencies": {
+    "sharp": "^0.35.3"
+  }
+}
