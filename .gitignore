@@ -23,3 +23,7 @@ release/
 # Build output (produced by build-plesk.sh)
 deploy/httpdocs/
 deploy/release/
+
+# Replit dev metadata (unused)
+.replit-artifact/
+.replit

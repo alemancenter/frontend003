@@ -1,0 +1,74 @@
+name: Build & Deploy to production
+
+# Every push to main builds the SPA + Node server on a clean Linux runner
+# (no Windows path issues) and deploys the built output to the Plesk server.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build SPA (alemancenter-web)
+        working-directory: alemancenter-web
+        env:
+          BASE_PATH: /
+          PORT: "3000"
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Build Node server (api-server)
+        working-directory: api-server
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Assemble httpdocs payload
+        run: |
+          rm -rf payload
+          mkdir -p payload/public payload/dist
+          cp -r alemancenter-web/dist/public/. payload/public/
+          cp -r api-server/dist/. payload/dist/
+          cp deploy/server.js           payload/server.js
+          cp deploy/server-package.json payload/package.json
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${{ secrets.DEPLOY_PORT || '22' }}" "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy to server
+        env:
+          SSH: ssh -i /home/runner/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT || '22' }}
+          DEST: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+          ROOT: /var/www/vhosts/alemancenter.com/httpdocs
+        run: |
+          # Replace the SPA and the server bundle. --delete removes stale files
+          # inside those folders only; node_modules / tmp / .well-known are untouched.
+          rsync -az --delete -e "$SSH" payload/public/ "$DEST:$ROOT/public/"
+          rsync -az --delete -e "$SSH" payload/dist/   "$DEST:$ROOT/dist/"
+          rsync -az          -e "$SSH" payload/server.js payload/package.json "$DEST:$ROOT/"
+          # Install native deps (sharp) if package.json changed, then restart Passenger.
+          $SSH "$DEST" "cd $ROOT && npm install --omit=dev --no-audit --no-fund && mkdir -p tmp && touch tmp/restart.txt && echo 'Deployed & restarted.'"

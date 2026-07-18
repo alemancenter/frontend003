@@ -27,13 +27,14 @@ cd ../api-server && pnpm install && pnpm build                            # → 
 ```
 
 ## النشر
-راجع الدليل الكامل: [`deploy/README-DEPLOY.md`](deploy/README-DEPLOY.md).
-النشر بأمر واحد بعد الإعداد الأولي:
-```bash
-cd deploy && bash build-and-package.sh        # ينتج alemancenter-web-release.tar.gz
-# ثم على السيرفر: bash server-deploy.sh
-```
+### 🚀 نشر تلقائي (موصى به)
+كل `git push` إلى `main` **يبني وينشر تلقائيًا** إلى السيرفر عبر GitHub Actions
+([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)) — بلا رفع يدوي.
+الإعداد لمرة واحدة (أسرار SSH): [`deploy/AUTO-DEPLOY.md`](deploy/AUTO-DEPLOY.md).
+
+### نشر يدوي (احتياطي)
+راجع [`deploy/README-DEPLOY.md`](deploy/README-DEPLOY.md) و [`deploy/build-plesk.sh`](deploy/build-plesk.sh).
 
 ## ⚠️ الأسرار
 - ملفات `.env` **غير مرفوعة** (مُتجاهَلة في git). القوالب فقط (`*.env.example`).
-- المفتاح `ALEMANCENTER_FRONTEND_API_KEY` يُضبط في `.env` على السيرفر يدويًا.
+- `ALEMANCENTER_FRONTEND_API_KEY` وبقية الأسرار تُضبط في **Plesk → Custom environment variables** — لا في المستودع.
