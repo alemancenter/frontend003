@@ -19,3 +19,7 @@ release/
 
 # TypeScript build cache
 *.tsbuildinfo
+
+# Build output (produced by build-plesk.sh)
+deploy/httpdocs/
+deploy/release/
