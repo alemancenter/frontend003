@@ -17,7 +17,9 @@ API="$ROOT/api-server"
 OUT="$HERE/release/httpdocs"
 
 echo "▶ Building SPA…"
-( cd "$WEB" && BASE_PATH=/ PORT=3000 pnpm install --frozen-lockfile && BASE_PATH=/ PORT=3000 pnpm build )
+# MSYS_NO_PATHCONV=1 stops Git Bash (Windows) from rewriting BASE_PATH="/" into a
+# Windows path like "/Program Files/Git/" — which would break every asset URL.
+( cd "$WEB" && pnpm install --frozen-lockfile && MSYS_NO_PATHCONV=1 BASE_PATH=/ PORT=3000 pnpm build )
 
 echo "▶ Building Node server…"
 ( cd "$API" && pnpm install --frozen-lockfile && pnpm build )
