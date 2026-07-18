@@ -4,7 +4,11 @@ import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
-const UPSTREAM_STORAGE = "https://api.alemancenter.com/storage";
+// Where uploaded files are served from. Defaults to the site's own /storage
+// path (served by nginx from the backend's uploads folder), which avoids a
+// dependency on the api subdomain's /storage routing. Override with
+// STORAGE_UPSTREAM if the files live elsewhere.
+const UPSTREAM_STORAGE = (process.env["STORAGE_UPSTREAM"] || "https://alemancenter.com/storage").replace(/\/+$/, "");
 
 const ALLOWED_SRC_RE = /^[a-zA-Z0-9/_.-]+$/;
 const MAX_WIDTH = 800;
