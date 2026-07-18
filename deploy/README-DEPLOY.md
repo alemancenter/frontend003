@@ -1,99 +1,99 @@
-# نشر واجهة alemancenter.com — AlmaLinux 9 + Plesk Obsidian
+# نشر واجهة alemancenter.com — Plesk Node.js (AlmaLinux 9)
 
-## البنية (مهم)
-النشر **ليس ملفات ثابتة فقط**. مكوّنان:
+موقعك يعمل كـ**تطبيق Node.js في Plesk** (Passenger):
+`App Root = /httpdocs` · `Document Root = /httpdocs/public` · `Startup File = server.js`.
+هذا الدليل يستبدل الموقع القديم بالجديد **بنفس البنية**.
 
-| المكوّن | ما هو | أين يعمل |
-|---|---|---|
-| **SPA الثابت** | مخرجات Vite (`dist/public`) | يُخدَم من `httpdocs` عبر Apache |
-| **api-server** (Node) | يحقن مفتاح الواجهة السري، يدير كوكي المصادقة httpOnly، يحسّن الصور (sharp)، يجرّد الرؤوس المزيّفة | خدمة systemd على `127.0.0.1:8080`، وnginx يمرّر لها `/api/*` |
+## ما الذي نبنيه
+خادم Node واحد (`server.js`) يخدم كل شيء:
+- **SPA الثابت** من `public/` + fallback لتوجيه العميل.
+- **`/api/*`**: حقن المفتاح السري، كوكي المصادقة httpOnly، تحسين الصور (sharp)، تمرير عكسي إلى `api.alemancenter.com`.
 
-> الـ`api-server` **إلزامي** — لا يمكن استبداله بتمرير nginx مباشر، لأنه يحمل السر ويدير الكوكيز وتحسين الصور.
-
+هيكل `/httpdocs` بعد النشر:
 ```
-المتصفح → nginx (Plesk)
-            ├── /api/*  → 127.0.0.1:8080 (api-server Node) → https://api.alemancenter.com
-            └── /*      → Apache → httpdocs (SPA) → index.html (fallback)
+/httpdocs/
+├── server.js       ← Startup File (يشغّل dist/index.mjs)
+├── dist/           ← خادم Node مُجمّع (index.mjs + عمّال pino)
+├── package.json    ← يحتوي sharp فقط (الباقي مُجمّع)
+├── public/         ← الـSPA  (Document Root)
+└── node_modules/   ← بعد "NPM install" في Plesk (يثبّت sharp)
 ```
 
 ---
 
-## الإعداد لأول مرة (مرة واحدة)
-
-### 1) بناء وتحزيم (على جهازك)
+## 1) البناء (على جهازك)
 ```bash
 cd artifacts/deploy
-bash build-and-package.sh
-# → ينتج alemancenter-web-release.tar.gz
+bash build-plesk.sh
+# → ينتج release/httpdocs/  و  httpdocs.tar.gz
 ```
 
-### 2) رفع الحزمة للسيرفر
+## 2) نسخة احتياطية + إيقاف (على السيرفر / Plesk)
 ```bash
-scp alemancenter-web-release.tar.gz root@SERVER:/tmp/
-ssh root@SERVER
-mkdir -p /tmp/alemancenter-release && tar -xzf /tmp/alemancenter-web-release.tar.gz -C /tmp/alemancenter-release
-cd /tmp/alemancenter-release
+cp -r /var/www/vhosts/alemancenter.com/httpdocs \
+      /var/www/vhosts/alemancenter.com/httpdocs.bak.$(date +%F)
+```
+ثم في Plesk: **Websites & Domains → alemancenter.com → Node.js → Disable Node.js**.
+
+## 3) استبدال المحتوى (تنظيف آمن)
+> آمن: الواجهة لا تحوي أي بيانات — كل المحتوى على `api.alemancenter.com`.
+```bash
+cd /var/www/vhosts/alemancenter.com/httpdocs
+# احذف القديم مع الإبقاء على ما يخصّ SSL/النظام
+find . -mindepth 1 -maxdepth 1 \
+  ! -name '.well-known' ! -name 'logs' ! -name 'tmp' -exec rm -rf {} +
 ```
 
-### 3) ضبط متغيّرات البيئة
+## 4) رفع الجديد
+ارفع `httpdocs.tar.gz` وفكّه داخل `/httpdocs`:
 ```bash
-mkdir -p /var/www/vhosts/alemancenter.com/api-server
-cp api-server/.env.example /var/www/vhosts/alemancenter.com/api-server/.env
-nano /var/www/vhosts/alemancenter.com/api-server/.env   # ضع ALEMANCENTER_FRONTEND_API_KEY الحقيقي
-chmod 600 /var/www/vhosts/alemancenter.com/api-server/.env
+tar -xzf /tmp/httpdocs.tar.gz -C /tmp && \
+cp -r /tmp/httpdocs/. /var/www/vhosts/alemancenter.com/httpdocs/
+# صحّح الملكية لمستخدم النطاق
+chown -R "$(stat -c '%U:%G' /var/www/vhosts/alemancenter.com)" \
+      /var/www/vhosts/alemancenter.com/httpdocs
 ```
+(أو استخدم **File Manager** في Plesk للرفع والفك.)
 
-### 4) تثبيت خدمة systemd
+## 5) متغيّرات البيئة (Plesk)
+Node.js → **Custom environment variables** → أضِف:
+| المفتاح | القيمة |
+|---|---|
+| `NODE_ENV` | `production` |
+| `ALEMANCENTER_FRONTEND_API_KEY` | المفتاح السري الحقيقي |
+| `ALLOWED_ORIGINS` | `https://alemancenter.com,https://www.alemancenter.com` |
+
+> Plesk يحقن `PORT` تلقائيًا — لا تضبطه يدويًا.
+
+## 6) التثبيت والتشغيل (Plesk)
+1. تأكد أن **Application Startup File = `server.js`** و **Document Root = `/httpdocs/public`**.
+2. اضغط **NPM install** (يثبّت sharp).
+3. اضغط **Enable Node.js** ثم **Restart App**.
+
+## 7) التحقق
 ```bash
-# ضع اسم مستخدم النطاق في Plesk بدل REPLACE_PLESK_SYSTEM_USER
-#   (Plesk → Subscriptions → alemancenter.com → System user)  أو:  stat -c '%U' /var/www/vhosts/alemancenter.com
-nano alemancenter-web-api.service
-cp alemancenter-web-api.service /etc/systemd/system/
-systemctl daemon-reload
-systemctl enable --now alemancenter-web-api
+curl -I  https://alemancenter.com/            # 200 text/html
+curl -s  https://alemancenter.com/api/health  # استجابة JSON
 ```
+افتح الموقع → سجّل دخولًا (كوكي المصادقة) → افتح مقالًا (صور + تحميل).
 
-### 5) توجيه nginx في Plesk
-Plesk → Domains → **alemancenter.com** → **Apache & nginx Settings** →
-«Additional nginx directives» → الصق محتوى `nginx-directives.conf` → OK.
-(اترك **Proxy mode** مُفعّلًا.)
-
-### 6) النشر الأول للملفات
+## التراجع (Rollback)
 ```bash
-cd /tmp/alemancenter-release
-bash server-deploy.sh
+# أعد المحتوى القديم ثم Restart App
+rsync -a --delete /var/www/vhosts/alemancenter.com/httpdocs.bak.YYYY-MM-DD/ \
+                  /var/www/vhosts/alemancenter.com/httpdocs/
 ```
 
 ---
 
 ## كل تحديث لاحق (روتين)
 ```bash
-# محليًا:
-cd artifacts/deploy && bash build-and-package.sh
-scp alemancenter-web-release.tar.gz root@SERVER:/tmp/
-
-# على السيرفر:
-rm -rf /tmp/alemancenter-release && mkdir -p /tmp/alemancenter-release
-tar -xzf /tmp/alemancenter-web-release.tar.gz -C /tmp/alemancenter-release
-cd /tmp/alemancenter-release && bash server-deploy.sh
+# محليًا
+cd artifacts/deploy && bash build-plesk.sh
+# ارفع httpdocs.tar.gz، فكّه فوق /httpdocs، ثم في Plesk: NPM install (إن تغيّرت الحزم) → Restart App
 ```
-`server-deploy.sh` يحدّث `httpdocs` وحزمة الـapi-server، يثبّت sharp، يصلح الملكية، ويعيد تشغيل الخدمة. آمن للتكرار.
-
----
-
-## التحقق بعد النشر
-```bash
-curl -I  https://alemancenter.com/                 # 200 + index.html
-curl -s  https://alemancenter.com/api/health       # استجابة الـapi-server
-systemctl status alemancenter-web-api              # active (running)
-```
-افتح الموقع، سجّل دخولًا (يتأكد كوكي المصادقة)، وافتح صورة (يتأكد /api/img).
-
-## التراجع (Rollback)
-- الثابت: يُحفظ نسخة سابقة في `httpdocs.bak/` — أعِدها بـrsync عند الحاجة.
-- الخدمة: `systemctl restart alemancenter-web-api`.
 
 ## ملاحظات
-- **الشهادة**: أبقِ Let's Encrypt في Plesk مفعّلًا للنطاق (HTTPS إلزامي — الكوكيز Secure).
-- **الباك اند Go** منفصل (`api.alemancenter.com`) وله دورة نشر خاصة — هذا الدليل للواجهة فقط.
-- **Node**: تأكد من توفّر Node 20+ على السيرفر (`node -v`). في Plesk يمكن تثبيته عبر إضافة Node.js أو من مستودع النظام.
+- **HTTPS إلزامي** (كوكي الدخول Secure) — أبقِ شهادة Plesk/Let's Encrypt مفعّلة.
+- **الباك اند** `api.alemancenter.com` منفصل وله دورة نشر خاصة — لا يُلمس هنا.
+- **الأسرار** لا تُرفع في git؛ تُضبط في Plesk «Custom environment variables».

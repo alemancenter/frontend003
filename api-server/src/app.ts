@@ -1,3 +1,4 @@
+import path from "node:path";
 import express, { type Express } from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -11,6 +12,10 @@ import proxyRouter from "./routes/proxy";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
+
+// Directory of the built SPA (index.html + assets). Defaults to ./public next
+// to the app root, which matches the Plesk "Document Root" (/httpdocs/public).
+const STATIC_DIR = process.env["STATIC_DIR"] || path.resolve(process.cwd(), "public");
 
 // Replit's shared reverse proxy sits in front of this service, so trust exactly
 // one hop for X-Forwarded-For to be parsed correctly by express-rate-limit.
@@ -72,14 +77,11 @@ app.use(
 
 app.use(
   helmet({
-    // API server only serves JSON — allow no content sources except self.
-    // This prevents content injection if a response is ever opened directly.
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'none'"],
-        frameAncestors: ["'none'"],
-      },
-    },
+    // This server now serves BOTH the SPA (HTML) and the API (JSON). The SPA
+    // ships its own tuned CSP via a <meta> tag in index.html, so we do NOT set a
+    // global CSP header here (a default-src 'none' header would break the app).
+    // The strict API-only CSP is applied just below, scoped to /api.
+    contentSecurityPolicy: false,
     crossOriginResourcePolicy: { policy: "cross-origin" },
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
     xContentTypeOptions: true,
@@ -91,6 +93,12 @@ app.use(
     },
   }),
 );
+
+// Strict CSP for the API surface only (locks down /api/img SVG rendering etc.).
+app.use("/api", (_req, res, next) => {
+  res.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
+  next();
+});
 
 app.use((_req, res, next) => {
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
@@ -182,5 +190,27 @@ app.use("/api/img", imgRouter);
 
 // Generic reverse-proxy — forwards everything else to the upstream backend.
 app.use("/api", proxyRouter);
+
+// ─── Static SPA + client-side routing fallback ────────────────────────────────
+// Everything that is NOT /api is the single-page app. Fingerprinted assets get a
+// long immutable cache; index.html is never cached so new deploys show instantly.
+app.use(
+  express.static(STATIC_DIR, {
+    index: false,
+    setHeaders(res, filePath) {
+      if (filePath.endsWith("index.html")) {
+        res.setHeader("Cache-Control", "no-cache, must-revalidate");
+      } else if (/[\\/]assets[\\/]/.test(filePath)) {
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      }
+    },
+  }),
+);
+
+// Any other GET falls back to the SPA entry so the client router can handle it.
+app.get(/.*/, (_req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.sendFile(path.join(STATIC_DIR, "index.html"));
+});
 
 export default app;

@@ -16,3 +16,6 @@ release/
 *.log
 .vite/
 .turbo/
+
+# TypeScript build cache
+*.tsbuildinfo
