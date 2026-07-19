@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useState,
   ReactNode,
 } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -38,6 +39,7 @@ const DEFAULTS: FrontSettings = {
 // ─── Context ─────────────────────────────────────────────────────────────────
 
 const SiteSettingsContext = createContext<FrontSettings>(DEFAULTS);
+const SETTINGS_CACHE_KEY = "alemancenter.front-settings.v1";
 
 export function useSiteSettings() {
   return useContext(SiteSettingsContext);
@@ -81,18 +83,6 @@ function applyCssColor(key: string, hex: string) {
     const fgHsl = l < 60 ? "0 0% 100%" : "0 0% 0%";
     document.documentElement.style.setProperty("--primary-foreground", fgHsl);
   }
-}
-
-/** Inject Google AdSense script (idempotent) */
-function injectAdSense(client: string) {
-  if (!client) return;
-  if (document.getElementById("adsense-script")) return;
-  const s = document.createElement("script");
-  s.id = "adsense-script";
-  s.async = true;
-  s.crossOrigin = "anonymous";
-  s.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${client}`;
-  document.head.appendChild(s);
 }
 
 /** Inject Google Analytics gtag script (idempotent) */
@@ -152,21 +142,82 @@ function applyFavicon(path: string) {
   link.href = url;
 }
 
+function readCachedSettings(): Partial<FrontSettings> | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function deferUntilAfterFirstPaint(callback: () => void): () => void {
+  let idleCleanup: (() => void) | undefined;
+  let done = false;
+  const run = () => {
+    if (done) return;
+    done = true;
+    idleCleanup?.();
+    callback();
+  };
+
+  const events = ["pointerdown", "keydown", "touchstart"] as const;
+  events.forEach((event) => window.addEventListener(event, run, { once: true, passive: true }));
+
+  const timer = window.setTimeout(() => {
+    const w = window as unknown as {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (typeof w.requestIdleCallback === "function") {
+      const id = w.requestIdleCallback(run, { timeout: 10000 });
+      idleCleanup = () => w.cancelIdleCallback?.(id);
+      return;
+    }
+    const fallback = window.setTimeout(run, 1000);
+    idleCleanup = () => window.clearTimeout(fallback);
+  }, 5000);
+
+  return () => {
+    window.clearTimeout(timer);
+    events.forEach((event) => window.removeEventListener(event, run));
+    idleCleanup?.();
+  };
+}
+
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function SiteSettingsProvider({ children }: { children: ReactNode }) {
+  const [canLoadSettings, setCanLoadSettings] = useState(false);
+  const [cachedSettings] = useState<Partial<FrontSettings> | null>(() => readCachedSettings());
+
+  useEffect(() => deferUntilAfterFirstPaint(() => setCanLoadSettings(true)), []);
+
   const { data } = useQuery({
     queryKey: ["site-settings"],
     queryFn: () => systemApi.getPublicSettings(),
+    enabled: canLoadSettings,
     staleTime: 5 * 60 * 1000, // 5 min — settings rarely change mid-session
     gcTime: 30 * 60 * 1000,
     retry: 2,
   });
 
   const settings = useMemo<FrontSettings>(
-    () => ({ ...DEFAULTS, ...(data ?? {}) }),
-    [data],
+    () => ({ ...DEFAULTS, ...(cachedSettings ?? {}), ...(data ?? {}) }),
+    [cachedSettings, data],
   );
+
+  useEffect(() => {
+    if (!data) return;
+    try {
+      window.localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(data));
+    } catch {
+      // Settings can still be fetched next time if storage is unavailable.
+    }
+  }, [data]);
 
   // ── Side effects whenever settings change ────────────────────────────────
 
@@ -199,17 +250,14 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
   }, [settings.secondary_color]);
 
   // Third-party marketing/analytics tags are deferred until the browser is idle
-  // so they never contend with the critical render (LCP/FCP). They add no value
-  // before the page is interactive, so loading them eagerly only hurt Core Web
-  // Vitals.
+  // so they never contend with the critical render (LCP/FCP). AdSense is loaded
+  // by AdUnit only when an ad slot approaches the viewport.
   useEffect(() => {
-    const client = settings.adsense_client ?? "";
     const gaId = settings.google_analytics_id ?? "";
     const fbId = settings.facebook_pixel_id ?? "";
-    if (!client && !gaId && !fbId) return;
+    if (!gaId && !fbId) return;
 
     const run = () => {
-      injectAdSense(client);
       injectGoogleAnalytics(gaId);
       injectFbPixel(fbId);
     };
@@ -219,12 +267,12 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
       cancelIdleCallback?: (id: number) => void;
     };
     if (typeof w.requestIdleCallback === "function") {
-      const id = w.requestIdleCallback(run, { timeout: 4000 });
+      const id = w.requestIdleCallback(run, { timeout: 8000 });
       return () => w.cancelIdleCallback?.(id);
     }
-    const t = window.setTimeout(run, 2500);
+    const t = window.setTimeout(run, 6000);
     return () => window.clearTimeout(t);
-  }, [settings.adsense_client, settings.google_analytics_id, settings.facebook_pixel_id]);
+  }, [settings.google_analytics_id, settings.facebook_pixel_id]);
 
   return (
     <SiteSettingsContext.Provider value={settings}>

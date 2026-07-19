@@ -13,6 +13,40 @@ const UPSTREAM_STORAGE = (process.env["STORAGE_UPSTREAM"] || "https://alemancent
 const ALLOWED_SRC_RE = /^[a-zA-Z0-9/_.-]+$/;
 const MAX_WIDTH = 800;
 const DEFAULT_WIDTH = 256;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set([
+  "image/avif",
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/svg+xml",
+  "image/webp",
+]);
+
+async function readLimitedResponse(upstream: globalThis.Response): Promise<Buffer | null> {
+  const contentLength = Number(upstream.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_IMAGE_BYTES) {
+    return null;
+  }
+
+  const reader = upstream.body?.getReader();
+  if (!reader) return Buffer.from(await upstream.arrayBuffer());
+
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    total += value.byteLength;
+    if (total > MAX_IMAGE_BYTES) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
+}
 
 router.get("/", async (req: Request, res: Response) => {
   const rawSrc = typeof req.query["src"] === "string" ? req.query["src"] : "";
@@ -43,17 +77,26 @@ router.get("/", async (req: Request, res: Response) => {
 
     const contentType = upstream.headers.get("content-type") ?? "";
     const isSvg = contentType.includes("svg") || rawSrc.toLowerCase().endsWith(".svg");
+    const normalizedContentType = contentType.split(";")[0]?.trim().toLowerCase();
 
-    if (isSvg) {
-      const buf = Buffer.from(await upstream.arrayBuffer());
-      res.setHeader("Content-Type", "image/svg+xml");
-      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-      res.setHeader("Vary", "Accept");
-      res.send(buf);
+    if (normalizedContentType && !ALLOWED_IMAGE_TYPES.has(normalizedContentType)) {
+      res.status(415).json({ success: false, message: "Unsupported image type" });
       return;
     }
 
-    const inputBuffer = Buffer.from(await upstream.arrayBuffer());
+    const inputBuffer = await readLimitedResponse(upstream);
+    if (!inputBuffer) {
+      res.status(413).json({ success: false, message: "Image is too large" });
+      return;
+    }
+
+    if (isSvg) {
+      res.setHeader("Content-Type", "image/svg+xml");
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      res.setHeader("Vary", "Accept");
+      res.send(inputBuffer);
+      return;
+    }
 
     const optimized = await sharp(inputBuffer)
       .resize({ width, withoutEnlargement: true })

@@ -100,11 +100,18 @@ export default defineConfig(async ({ command }) => ({
         // undefined so Rollup bundles it INTO the lazy route that imports it and
         // it never gets preloaded on the home page.
         manualChunks(id) {
-          if (!id.includes("node_modules")) return undefined;
-          if (id.includes("@tanstack")) return "query";
-          if (id.includes("wouter")) return "router";
-          if (id.includes("lucide-react")) return "icons";
-          if (id.includes("@radix-ui")) return "radix";
+          const normalizedId = id.replaceAll("\\", "/");
+          if (!normalizedId.includes("/node_modules/")) return undefined;
+          if (
+            normalizedId.includes("/node_modules/react/") ||
+            normalizedId.includes("/node_modules/react-dom/") ||
+            normalizedId.includes("/node_modules/scheduler/")
+          ) {
+            return "react";
+          }
+          if (normalizedId.includes("/node_modules/@tanstack/")) return "query";
+          if (normalizedId.includes("/node_modules/wouter/")) return "router";
+          if (normalizedId.includes("/node_modules/@radix-ui/")) return "radix";
           return undefined;
         },
       },

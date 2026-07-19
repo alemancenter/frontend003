@@ -1,0 +1,13 @@
+{
+  "name": "alemancenter-web",
+  "private": true,
+  "type": "module",
+  "description": "Plesk Node.js app for alemancenter.com: serves the SPA + the /api proxy. Only sharp is native and installed on the server (via Plesk 'NPM install'); every other dependency is bundled into dist/index.mjs.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "sharp": "^0.35.3"
+  }
+}

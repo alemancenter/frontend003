@@ -39,6 +39,12 @@ const HOP_BY_HOP_RESPONSE_HEADERS = new Set([
   "set-cookie",
 ]);
 
+const BLOCKED_OPERATIONAL_PATHS = new Set([
+  "/health",
+  "/ping",
+  "/metrics",
+]);
+
 // ─── Per-path request body validators ────────────────────────────────────────
 // These schemas validate the body of specific high-risk proxied paths before
 // forwarding.  Keys are the path component after /api (no query string).
@@ -63,6 +69,21 @@ const PROXY_VALIDATORS: Record<string, z.ZodTypeAny> = {
 
 function getProxyPath(req: Request): string {
   return req.originalUrl.replace(/^\/api/, "").split("?")[0];
+}
+
+function normalizeProxyPath(path: string): string | null {
+  try {
+    const decoded = decodeURIComponent(path);
+    const compact = decoded.replace(/\/{2,}/g, "/").replace(/\/+$/, "");
+    return (compact || "/").toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function isBlockedOperationalPath(path: string): boolean {
+  const normalized = normalizeProxyPath(path);
+  return normalized !== null && BLOCKED_OPERATIONAL_PATHS.has(normalized);
 }
 
 // Builds and confines the upstream URL: after normalization the path must stay
@@ -121,6 +142,11 @@ function validateProxyBody(req: Request, res: Response, upstreamPath: string): b
 
 router.all(/.*/, async (req: Request, res: Response) => {
   const upstreamPath = getProxyPath(req);
+  if (isBlockedOperationalPath(upstreamPath)) {
+    res.status(404).json({ success: false, message: "Not found" });
+    return;
+  }
+
   const target = buildTargetUrl(req);
   if (!target) {
     res.status(400).json({ success: false, message: "مسار الطلب غير صالح" });

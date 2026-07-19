@@ -4,17 +4,19 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { authApi, type LoginInput, type RegisterInput } from "@/lib/api/auth";
-import { clearTokens, setTokens } from "@/lib/api/client";
+import { ApiError, clearTokens, setTokens } from "@/lib/api/client";
 import type { AuthTokens, User } from "@/lib/api/types";
 import { getFacebookAccessToken, getGoogleIdToken } from "@/lib/social-auth";
 
 interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
+  hasCheckedAuth: boolean;
   isAuthenticated: boolean;
   login: (input: LoginInput) => Promise<User>;
   register: (input: RegisterInput) => Promise<User>;
@@ -151,30 +153,53 @@ function hasAnyManagementPermission(user: User | null): boolean {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  // A hard reload always loses the in-memory access token, so authentication
+  // must be restored before the app announces a logged-out state.
   const [isLoading, setIsLoading] = useState(true);
+  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
+  const refreshInFlightRef = useRef<Promise<void> | null>(null);
 
-  const refreshUser = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      // Access token lives in memory only and is lost on page reload.
-      // Calling /auth/user will trigger a 401 → the API client will
-      // automatically attempt a silent refresh via the httpOnly cookie, then
-      // retry.  If the cookie is absent or expired the fetch throws and we
-      // clear local state.
-      const me = await authApi.me();
-      setUser(me);
-    } catch {
-      clearTokens();
-      setUser(null);
-    } finally {
-      setIsLoading(false);
-    }
+  const refreshUser = useCallback((): Promise<void> => {
+    // Provider bootstrap and protected routes may ask for auth at the same
+    // time. Reuse one request so refresh-token rotation cannot race itself.
+    if (refreshInFlightRef.current) return refreshInFlightRef.current;
+
+    const task = (async () => {
+      setIsLoading(true);
+      try {
+        // The access token is memory-only. /auth/user may initially return 401;
+        // the API client then restores an access token through /auth/refresh
+        // using the httpOnly refresh cookie and retries this request once.
+        const me = await authApi.me();
+        setUser(me);
+      } catch (error) {
+        // Only an actual authentication rejection should destroy local auth
+        // state. A temporary network/server failure must not turn a valid
+        // session into a logout merely because the page was reloaded.
+        if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+          clearTokens();
+          setUser(null);
+        }
+      } finally {
+        setHasCheckedAuth(true);
+        setIsLoading(false);
+      }
+    })();
+
+    refreshInFlightRef.current = task;
+    task.finally(() => {
+      if (refreshInFlightRef.current === task) refreshInFlightRef.current = null;
+    });
+    return task;
   }, []);
 
   useEffect(() => {
-    refreshUser();
+    // Do not defer this to the first click. Deferring caused public pages to
+    // render as logged out after a reload and only restore the session later.
+    void refreshUser();
   }, [refreshUser]);
 
   const login = useCallback(async (input: LoginInput) => {
@@ -186,6 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTokens(accessToken, result.refresh_token);
     const me = result.user ?? (await authApi.me());
     setUser(me);
+    setHasCheckedAuth(true);
     return me;
   }, []);
 
@@ -197,6 +223,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const me = result.user ?? (accessToken ? await authApi.me() : null);
     if (me) setUser(me);
+    setHasCheckedAuth(true);
     return me as User;
   }, []);
 
@@ -208,6 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTokens(accessToken, result.refresh_token);
     const me = result.user ?? (await authApi.me());
     setUser(me);
+    setHasCheckedAuth(true);
     return me;
   }, []);
 
@@ -231,6 +259,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       clearTokens();
       setUser(null);
+      setHasCheckedAuth(true);
     }
   }, []);
 
@@ -270,6 +299,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       isLoading,
+      hasCheckedAuth,
       isAuthenticated: !!user,
       login,
       register,
@@ -287,6 +317,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [
       user,
       isLoading,
+      hasCheckedAuth,
       login,
       register,
       loginWithGoogle,

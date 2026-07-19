@@ -146,7 +146,7 @@ export function ArticleDetail() {
   const { data: comments, refetch: refetchComments } = useQuery({
     queryKey: ["article-comments", country, id],
     queryFn: () => commentsApi.list(country, "articles", { commentable_id: Number(id) }),
-    enabled: !!id,
+    enabled: Boolean(article && id),
   });
 
   const submitComment = useMutation({

@@ -1,28 +1,11 @@
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { prefetchRoute } from "@/lib/prefetch";
 import { imgUrl, imgSrcSet } from "@/lib/img-url";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
-import {
-  BookOpen,
-  LogOut,
-  Menu,
-  User,
-  Phone,
-  Moon,
-  Sun,
-} from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { BookOpen, LogOut, Menu, Moon, Phone, Sun, User, X } from "lucide-react";
 import { useCountry } from "@/hooks/use-country";
 import { routes } from "@/lib/country";
 import { CountrySwitcher } from "@/components/layout/CountrySwitcher";
@@ -35,16 +18,16 @@ const TOP_LINKS = [
 ];
 
 export function Navbar() {
-  const { user, isAuthenticated, logout, canAccessPrivilegedAdmin, isTeacher } = useAuth();
+  const { user, isAuthenticated, isLoading: isAuthLoading, hasCheckedAuth, logout, canAccessPrivilegedAdmin, isTeacher } = useAuth();
   const [location] = useLocation();
   const country = useCountry();
   const settings = useSiteSettings();
   const [isDark, setIsDark] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
 
   const siteName = settings.site_name || "موقع الإيمان التعليمي";
-  // Use the first clause of the description as a tagline. Never hard-slice by
-  // character count — that cuts words mid-letter; let CSS ellipsis handle overflow.
   const siteSubtitle = settings.site_description
     ? settings.site_description.split("،")[0].trim()
     : "بوابة المستقبل التعليمية";
@@ -57,6 +40,29 @@ export function Navbar() {
     setIsDark(dark);
     document.documentElement.classList.toggle("dark", dark);
   }, []);
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!userMenuRef.current?.contains(event.target as Node)) setUserMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setUserMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [userMenuOpen]);
+
+  useEffect(() => {
+    document.body.style.overflow = mobileOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileOpen]);
 
   const toggleDark = () => {
     setIsDark((prev) => {
@@ -78,12 +84,12 @@ export function Navbar() {
   const isActive = (href: string) =>
     href === "/" ? location === "/" : location.startsWith(href);
 
+  const closeMobile = () => setMobileOpen(false);
+
   return (
     <header className="sticky top-0 z-50 w-full" dir="rtl">
-      {/* ── Dark top utility bar (desktop only) ──────────────────────────── */}
-      <div className="hidden lg:block bg-[#061a3a]">
+      <div className="hidden bg-[#061a3a] lg:block">
         <div className="mx-auto flex h-10 max-w-[1540px] items-center justify-between px-6 text-[13px] font-semibold">
-          {/* Left: contact + dark toggle */}
           <div className="flex items-center gap-4">
             <Link
               href="/contact-us"
@@ -94,20 +100,16 @@ export function Navbar() {
             </Link>
             <span className="h-4 w-px bg-white/20" />
             <button
+              type="button"
               onClick={toggleDark}
               aria-label="تبديل الوضع الليلي"
               className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-white/80 transition hover:bg-white/10 hover:text-white"
             >
-              {isDark ? (
-                <Sun className="h-3.5 w-3.5" />
-              ) : (
-                <Moon className="h-3.5 w-3.5" />
-              )}
+              {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
               {isDark ? "فاتح" : "داكن"}
             </button>
           </div>
 
-          {/* Right: utility links */}
           <nav className="flex items-center gap-5">
             {TOP_LINKS.map((link) => (
               <Link
@@ -124,14 +126,9 @@ export function Navbar() {
         </div>
       </div>
 
-      {/* ── Main navigation bar ──────────────────────────────────────────── */}
       <div className="border-b border-slate-200 bg-white/95 shadow-sm shadow-slate-100/80 backdrop-blur-xl dark:border-slate-700 dark:bg-slate-900/95 dark:shadow-slate-900/40">
         <div className="mx-auto flex h-[70px] max-w-[1540px] items-center justify-between gap-4 px-4 sm:px-6">
-          {/* Logo */}
-          <Link
-            href="/"
-            className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3 lg:flex-none"
-          >
+          <Link href="/" className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3 lg:flex-none">
             {logoPath ? (
               <>
                 <img
@@ -140,10 +137,13 @@ export function Navbar() {
                   sizes="48px"
                   alt={siteName}
                   className="h-10 w-10 rounded-2xl object-contain sm:h-12 sm:w-12"
-                  onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).style.display = "none";
-                    const fb = e.currentTarget.nextSibling as HTMLElement | null;
-                    if (fb) fb.style.display = "flex";
+                  width={48}
+                  height={48}
+                  decoding="async"
+                  onError={(event) => {
+                    event.currentTarget.style.display = "none";
+                    const fallback = event.currentTarget.nextSibling as HTMLElement | null;
+                    if (fallback) fallback.style.display = "flex";
                   }}
                 />
                 <div
@@ -162,14 +162,13 @@ export function Navbar() {
               <p className="truncate text-base font-black leading-tight tracking-tight text-slate-950 dark:text-white sm:text-[22px]">
                 {siteName}
               </p>
-              <p className="hidden truncate text-[12px] font-semibold leading-tight text-slate-400 dark:text-slate-400 sm:block">
+              <p className="hidden truncate text-[12px] font-semibold leading-tight text-slate-500 dark:text-slate-300 sm:block">
                 {siteSubtitle}
               </p>
             </div>
           </Link>
 
-          {/* Desktop nav links */}
-          <nav className="hidden lg:flex items-center gap-1">
+          <nav className="hidden items-center gap-1 lg:flex">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
@@ -190,82 +189,94 @@ export function Navbar() {
             ))}
           </nav>
 
-          {/* Right actions */}
           <div className="flex items-center gap-2">
-            {/* Country switcher — desktop */}
             <div className="hidden sm:block">
               <CountrySwitcher variant="desktop" />
             </div>
 
-            {/* Dark toggle on mobile */}
             <button
+              type="button"
               onClick={toggleDark}
               aria-label="تبديل الوضع الليلي"
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 lg:hidden"
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 lg:hidden"
             >
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
 
-            {isAuthenticated ? (
-              <DropdownMenu dir="rtl">
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="gap-2 rounded-full border-slate-200 px-4 font-bold dark:border-slate-700"
+            {isAuthLoading || !hasCheckedAuth ? (
+              <>
+                <div
+                  className="hidden h-9 w-28 animate-pulse rounded-full bg-slate-100 dark:bg-slate-800 sm:block"
+                  aria-label="جارٍ التحقق من جلسة الدخول"
+                />
+                <div
+                  className="h-9 w-9 animate-pulse rounded-full bg-slate-100 dark:bg-slate-800 sm:hidden"
+                  aria-label="جارٍ التحقق من جلسة الدخول"
+                />
+              </>
+            ) : isAuthenticated ? (
+              <>
+                <Link
+                  href="/profile"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:hidden"
+                  aria-label={`حساب ${user?.name || "المستخدم"}`}
+                  title={user?.name || "حساب المستخدم"}
+                >
+                  <User className="h-4 w-4" />
+                </Link>
+                <div ref={userMenuRef} className="relative hidden sm:block">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2 rounded-full border-slate-200 px-4 font-bold dark:border-slate-700"
+                  aria-haspopup="menu"
+                  aria-expanded={userMenuOpen}
+                  onClick={() => setUserMenuOpen((value) => !value)}
+                >
+                  <User className="h-4 w-4" />
+                  <span className="max-w-[90px] truncate text-sm">{user?.name}</span>
+                </Button>
+                {userMenuOpen && (
+                  <div
+                    className="absolute left-0 top-full z-50 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-2 text-sm shadow-lg dark:border-slate-700 dark:bg-slate-900"
+                    role="menu"
                   >
-                    <User className="h-4 w-4" />
-                    <span className="hidden sm:inline-block max-w-[90px] truncate text-sm">
-                      {user?.name}
-                    </span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>
-                    <div className="flex flex-col space-y-0.5">
-                      <p className="text-sm font-bold leading-none">{user?.name}</p>
-                      <p className="text-xs leading-none text-muted-foreground">
-                        {user?.email}
-                      </p>
+                    <div className="border-b border-slate-100 px-3 py-2 dark:border-slate-800">
+                      <p className="font-bold leading-none">{user?.name}</p>
+                      <p className="mt-1 truncate text-xs text-muted-foreground">{user?.email}</p>
                     </div>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link href="/profile" className="w-full cursor-pointer">
+                    <Link href="/profile" className="block rounded-lg px-3 py-2 font-semibold hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => setUserMenuOpen(false)}>
                       الملف الشخصي
                     </Link>
-                  </DropdownMenuItem>
-                  {canAccessPrivilegedAdmin ? (
-                    <DropdownMenuItem asChild>
-                      <Link href="/admin" className="w-full cursor-pointer">
-                        لوحة التحكم
-                      </Link>
-                    </DropdownMenuItem>
-                  ) : (
-                    <DropdownMenuItem asChild>
-                      <Link href="/dashboard" className="w-full cursor-pointer">
-                        لوحة العضو
-                      </Link>
-                    </DropdownMenuItem>
-                  )}
-                  {isTeacher && (
-                    <DropdownMenuItem asChild>
-                      <Link href="/teacher" className="w-full cursor-pointer">
+                    <Link
+                      href={canAccessPrivilegedAdmin ? "/admin" : "/dashboard"}
+                      className="block rounded-lg px-3 py-2 font-semibold hover:bg-slate-100 dark:hover:bg-slate-800"
+                      onClick={() => setUserMenuOpen(false)}
+                    >
+                      {canAccessPrivilegedAdmin ? "لوحة التحكم" : "لوحة العضو"}
+                    </Link>
+                    {isTeacher && (
+                      <Link href="/teacher" className="block rounded-lg px-3 py-2 font-semibold hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => setUserMenuOpen(false)}>
                         بوابة المعلم
                       </Link>
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => logout()}
-                    className="text-destructive focus:bg-destructive/10 cursor-pointer"
-                  >
-                    <LogOut className="ml-2 h-4 w-4" />
-                    تسجيل الخروج
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        void logout();
+                      }}
+                      className="mt-1 flex w-full items-center gap-2 rounded-lg border-t border-slate-100 px-3 py-2 text-right font-semibold text-destructive hover:bg-destructive/10 dark:border-slate-800"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      تسجيل الخروج
+                    </button>
+                  </div>
+                )}
+              </div>
+              </>
             ) : (
-              <div className="hidden sm:flex items-center gap-2">
+              <div className="hidden items-center gap-2 sm:flex">
                 <Link href="/login">
                   <span className="inline-flex h-9 items-center rounded-xl px-4 text-sm font-bold text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
                     تسجيل الدخول
@@ -279,85 +290,146 @@ export function Navbar() {
               </div>
             )}
 
-            {/* Mobile hamburger */}
-            <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-              <SheetTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="rounded-xl lg:hidden"
-                >
-                  <Menu className="h-5 w-5" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-[300px] sm:w-[380px]" dir="rtl">
-                <div className="flex flex-col gap-1 mt-8">
-                  {navLinks.map((link) => (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      onMouseEnter={() => prefetchRoute(link.href)}
-                      onFocus={() => prefetchRoute(link.href)}
-                    >
-                      <span
-                        onClick={() => setMobileOpen(false)}
-                        className={`flex h-11 items-center rounded-xl px-4 text-base font-bold transition-colors ${
-                          isActive(link.href)
-                            ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                            : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                        }`}
-                      >
-                        {link.label}
-                      </span>
-                    </Link>
-                  ))}
-
-                  {!isAuthenticated && (
-                    <div className="flex flex-col gap-2 mt-6 pt-6 border-t">
-                      <Link href="/login">
-                        <Button
-                          variant="outline"
-                          className="w-full rounded-xl font-bold"
-                          onClick={() => setMobileOpen(false)}
-                        >
-                          تسجيل الدخول
-                        </Button>
-                      </Link>
-                      <Link href="/register">
-                        <Button
-                          className="w-full rounded-xl bg-blue-700 font-black hover:bg-blue-800 shadow-lg shadow-blue-700/20"
-                          onClick={() => setMobileOpen(false)}
-                        >
-                          حساب جديد
-                        </Button>
-                      </Link>
-                    </div>
-                  )}
-
-                  <div className="mt-6 pt-6 border-t">
-                    <div onClick={() => setMobileOpen(false)}>
-                      <CountrySwitcher variant="mobile" />
-                    </div>
-                  </div>
-
-                  <div className="mt-4 pt-4 border-t flex flex-col gap-1">
-                    {TOP_LINKS.map((link) => (
-                      <Link key={link.href} href={link.href}>
-                        <span
-                          onClick={() => setMobileOpen(false)}
-                          className="flex h-9 items-center rounded-xl px-4 text-sm font-semibold text-slate-500 hover:bg-slate-100 transition-colors dark:text-slate-400 dark:hover:bg-slate-800"
-                        >
-                          {link.label}
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              </SheetContent>
-            </Sheet>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="rounded-xl lg:hidden"
+              aria-label="فتح قائمة التنقل"
+              title="فتح قائمة التنقل"
+              aria-expanded={mobileOpen}
+              onClick={() => setMobileOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+              <span className="sr-only">فتح قائمة التنقل</span>
+            </Button>
           </div>
         </div>
       </div>
+
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="قائمة التنقل">
+          <button
+            type="button"
+            aria-label="إغلاق قائمة التنقل"
+            className="absolute inset-0 bg-black/55"
+            onClick={closeMobile}
+          />
+          <aside className="absolute right-0 top-0 flex h-[100dvh] max-h-[100dvh] w-[300px] max-w-[86vw] flex-col overflow-hidden bg-background shadow-2xl sm:w-[380px]">
+            <div className="flex shrink-0 items-center justify-between border-b px-5 py-4 sm:px-6">
+              <p className="text-base font-black text-foreground">القائمة</p>
+              <button
+                type="button"
+                className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                aria-label="إغلاق قائمة التنقل"
+                onClick={closeMobile}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">
+              {isAuthLoading || !hasCheckedAuth ? (
+                <div className="mb-4 animate-pulse rounded-2xl border p-4">
+                  <div className="mb-2 h-4 w-28 rounded bg-slate-200 dark:bg-slate-700" />
+                  <div className="h-3 w-40 rounded bg-slate-100 dark:bg-slate-800" />
+                </div>
+              ) : isAuthenticated ? (
+                <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-700 text-white">
+                      <User className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-black text-foreground">{user?.name || "المستخدم"}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{user?.email}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <Link href="/profile">
+                      <span onClick={closeMobile} className="flex h-9 items-center justify-center rounded-xl border bg-background px-2 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800">
+                        الملف الشخصي
+                      </span>
+                    </Link>
+                    <Link href={canAccessPrivilegedAdmin ? "/admin" : "/dashboard"}>
+                      <span onClick={closeMobile} className="flex h-9 items-center justify-center rounded-xl border bg-background px-2 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800">
+                        {canAccessPrivilegedAdmin ? "لوحة التحكم" : "لوحة العضو"}
+                      </span>
+                    </Link>
+                  </div>
+                  {isTeacher && (
+                    <Link href="/teacher">
+                      <span onClick={closeMobile} className="mt-2 flex h-9 items-center justify-center rounded-xl border bg-background px-2 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800">
+                        بوابة المعلم
+                      </span>
+                    </Link>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeMobile();
+                      void logout();
+                    }}
+                    className="mt-2 flex h-9 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold text-destructive hover:bg-destructive/10"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    تسجيل الخروج
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="flex flex-col gap-1">
+              {navLinks.map((link) => (
+                <Link key={link.href} href={link.href}>
+                  <span
+                    onClick={closeMobile}
+                    className={`flex h-11 items-center rounded-xl px-4 text-base font-bold transition-colors ${
+                      isActive(link.href)
+                        ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                        : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                    }`}
+                  >
+                    {link.label}
+                  </span>
+                </Link>
+              ))}
+
+              {!isAuthLoading && hasCheckedAuth && !isAuthenticated && (
+                <div className="mt-6 flex flex-col gap-2 border-t pt-6">
+                  <Link href="/login">
+                    <Button variant="outline" className="w-full rounded-xl font-bold" onClick={closeMobile}>
+                      تسجيل الدخول
+                    </Button>
+                  </Link>
+                  <Link href="/register">
+                    <Button className="w-full rounded-xl bg-blue-700 font-black shadow-lg shadow-blue-700/20 hover:bg-blue-800" onClick={closeMobile}>
+                      حساب جديد
+                    </Button>
+                  </Link>
+                </div>
+              )}
+
+              <div className="mt-6 border-t pt-6" onClick={closeMobile}>
+                <CountrySwitcher variant="mobile" />
+              </div>
+
+              <div className="mt-4 flex flex-col gap-1 border-t pt-4">
+                {TOP_LINKS.map((link) => (
+                  <Link key={link.href} href={link.href}>
+                    <span
+                      onClick={closeMobile}
+                      className="flex h-9 items-center rounded-xl px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                    >
+                      {link.label}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      )}
     </header>
   );
 }

@@ -50,9 +50,11 @@ function isOriginAllowed(origin: string | undefined): boolean {
 }
 
 if (!process.env["ALEMANCENTER_FRONTEND_API_KEY"]) {
-  logger.warn(
-    "ALEMANCENTER_FRONTEND_API_KEY is not set — upstream requests will be sent without X-Frontend-Key",
-  );
+  const message = "ALEMANCENTER_FRONTEND_API_KEY is not set";
+  if (isProduction) {
+    throw new Error(`${message}; refusing to start production without X-Frontend-Key`);
+  }
+  logger.warn(`${message} — upstream requests will be sent without X-Frontend-Key`);
 }
 
 app.use(

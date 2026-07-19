@@ -51,6 +51,7 @@ declare global {
 }
 
 const isDev = import.meta.env.DEV;
+let adSenseScriptPromise: Promise<void> | null = null;
 
 interface AdConfig {
   slot: string;
@@ -120,6 +121,57 @@ function useIsDesktop() {
   return isDesktop;
 }
 
+function loadAdSenseScript(client: string): Promise<void> {
+  if (!client) return Promise.resolve();
+  if (document.getElementById("adsense-script")) return Promise.resolve();
+  if (adSenseScriptPromise) return adSenseScriptPromise;
+
+  const promise = new Promise<void>((resolve, reject) => {
+    const script = document.createElement("script");
+    script.id = "adsense-script";
+    script.async = true;
+    script.crossOrigin = "anonymous";
+    script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${client}`;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("AdSense failed to load"));
+    document.head.appendChild(script);
+  }).catch(() => {});
+
+  adSenseScriptPromise = promise;
+  return adSenseScriptPromise;
+}
+
+function whenIdle(callback: () => void): () => void {
+  const w = window as unknown as {
+    requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    cancelIdleCallback?: (id: number) => void;
+  };
+  if (typeof w.requestIdleCallback === "function") {
+    const id = w.requestIdleCallback(callback, { timeout: 3000 });
+    return () => w.cancelIdleCallback?.(id);
+  }
+  const timer = window.setTimeout(callback, 1200);
+  return () => window.clearTimeout(timer);
+}
+
+function useCanRequestAds() {
+  const [canRequestAds, setCanRequestAds] = useState(false);
+
+  useEffect(() => {
+    let idleCleanup: (() => void) | undefined;
+    const enable = () => setCanRequestAds(true);
+    const timer = window.setTimeout(() => {
+      idleCleanup = whenIdle(enable);
+    }, 9000);
+    return () => {
+      window.clearTimeout(timer);
+      idleCleanup?.();
+    };
+  }, []);
+
+  return canRequestAds;
+}
+
 // ─── Single rendered ins slot ──────────────────────────────────────────────
 
 function AdSlot({ client, config }: { client: string; config: AdConfig }) {
@@ -128,25 +180,16 @@ function AdSlot({ client, config }: { client: string; config: AdConfig }) {
 
   useEffect(() => {
     let cancelled = false;
-    let rafId = 0;
-    let retryTimer = 0;
-    let observer: ResizeObserver | null = null;
+    let idleCleanup: (() => void) | undefined;
+    let intersectionObserver: IntersectionObserver | null = null;
 
-    const pushWhenSized = () => {
+    const pushAd = async () => {
       if (cancelled || pushed.current) return;
       const element = slotRef.current;
       if (!element) return;
 
-      const width =
-        element.getBoundingClientRect().width ||
-        element.offsetWidth ||
-        element.parentElement?.getBoundingClientRect().width ||
-        0;
-
-      if (width <= 0) {
-        retryTimer = window.setTimeout(pushWhenSized, 150);
-        return;
-      }
+      await loadAdSenseScript(client);
+      if (cancelled || pushed.current || !element.isConnected) return;
 
       pushed.current = true;
       try {
@@ -156,23 +199,33 @@ function AdSlot({ client, config }: { client: string; config: AdConfig }) {
       }
     };
 
-    rafId = window.requestAnimationFrame(pushWhenSized);
-    retryTimer = window.setTimeout(pushWhenSized, 300);
+    const schedulePush = () => {
+      idleCleanup = whenIdle(() => {
+        window.requestAnimationFrame(() => {
+          void pushAd();
+        });
+      });
+    };
 
-    if (typeof ResizeObserver !== "undefined" && slotRef.current) {
-      observer = new ResizeObserver(pushWhenSized);
-      observer.observe(slotRef.current);
-      if (slotRef.current.parentElement) observer.observe(slotRef.current.parentElement);
+    if ("IntersectionObserver" in window && slotRef.current) {
+      intersectionObserver = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((entry) => entry.isIntersecting)) {
+            intersectionObserver?.disconnect();
+            schedulePush();
+          }
+        },
+        { rootMargin: "0px 0px" },
+      );
+      intersectionObserver.observe(slotRef.current);
+    } else {
+      schedulePush();
     }
-
-    window.addEventListener("resize", pushWhenSized);
 
     return () => {
       cancelled = true;
-      window.cancelAnimationFrame(rafId);
-      window.clearTimeout(retryTimer);
-      window.removeEventListener("resize", pushWhenSized);
-      observer?.disconnect();
+      idleCleanup?.();
+      intersectionObserver?.disconnect();
     };
   }, [client, config.slot]);
 
@@ -218,6 +271,7 @@ function AdPlaceholder({ label }: { label: string }) {
 export function AdUnit({ page, position = 1, className }: AdUnitProps) {
   const settings = useSiteSettings();
   const isDesktop = useIsDesktop();
+  const canRequestAds = useCanRequestAds();
 
   const client      = settings.adsense_client ?? "";
   const key         = PAGE_KEY[page];
@@ -231,7 +285,7 @@ export function AdUnit({ page, position = 1, className }: AdUnitProps) {
     ? (desktopCfg || mobileCfg)
     : (mobileCfg || desktopCfg);
 
-  const hasAd = !!client && !!activeConfig;
+  const hasAd = !!client && !!activeConfig && canRequestAds;
 
   if (!hasAd) {
     if (!isDev) return null;
@@ -244,7 +298,7 @@ export function AdUnit({ page, position = 1, className }: AdUnitProps) {
 
   return (
     <div className={cn("mx-auto flex w-full flex-col items-center justify-center overflow-hidden py-2 text-center", className)}>
-      <p className="text-center text-[10px] text-muted-foreground/40 mb-1 select-none leading-none">
+      <p className="text-center text-[10px] font-semibold text-slate-600 mb-1 select-none leading-none dark:text-slate-300">
         إعلان
       </p>
       <AdSlot client={client} config={activeConfig!} />

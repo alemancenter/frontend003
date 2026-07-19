@@ -1,8 +1,6 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Switch, Route, Router as WouterRouter, Redirect, useParams, useLocation } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { Spinner } from "@/components/ui/spinner";
 
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -13,6 +11,8 @@ import { RequireAuth, RequirePermission, RequireTeacherPortal } from "@/componen
 import { PublicLayout } from "@/components/layout/PublicLayout";
 
 import { DEFAULT_COUNTRY } from "@/lib/country";
+import { queryClient } from "@/lib/query-client";
+import { cancelPrefetch, prefetchRoute } from "@/lib/prefetch";
 
 const NotFound = lazy(() => import("@/pages/not-found"));
 
@@ -48,6 +48,7 @@ const Team = lazy(() => import("@/pages/public/Team").then((m) => ({ default: m.
 const KeywordDetail = lazy(() => import("@/pages/public/KeywordDetail").then((m) => ({ default: m.KeywordDetail })));
 
 const AdminRoutes = lazy(() => import("@/pages/admin").then((m) => ({ default: m.AdminRoutes })));
+const Toaster = lazy(() => import("@/components/ui/toaster").then((m) => ({ default: m.Toaster })));
 
 const TeacherLayout = lazy(() =>
   import("@/components/teacher/TeacherLayout").then((m) => ({ default: m.TeacherLayout })),
@@ -64,26 +65,51 @@ const NotificationsPage = lazy(() =>
 );
 const OrdersPage = lazy(() => import("@/pages/teacher/OrdersPage").then((m) => ({ default: m.OrdersPage })));
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 60 * 1000, // 1 min — avoid immediate refetch on every remount/navigation
-      gcTime: 15 * 60 * 1000,
-      refetchOnWindowFocus: false,
-      retry: 1,
-    },
-  },
-});
-
 function RouteFallback() {
-  // Reserve a full viewport height while the lazy route loads. This keeps the
-  // page footer below the fold during loading, so it doesn't jump downward when
-  // the (much taller) real content mounts — the single biggest CLS source.
+  // Keep the public shell visible during a lazy-route miss. A compact fallback
+  // feels much faster than replacing the whole viewport with a loading screen.
   return (
-    <div className="flex min-h-[100dvh] w-full items-center justify-center py-20">
-      <Spinner className="size-8 text-primary" />
+    <div className="flex min-h-[38vh] w-full items-start justify-center pt-20" role="status" aria-label="جاري تحميل الصفحة">
+      <Spinner className="size-7 text-primary" />
     </div>
   );
+}
+
+function NavigationPrefetcher() {
+  useEffect(() => {
+    const anchorFromEvent = (event: Event) =>
+      (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+
+    const onPointerOver = (event: PointerEvent) => {
+      const anchor = anchorFromEvent(event);
+      if (anchor) prefetchRoute(anchor.href);
+    };
+    const onPointerOut = (event: PointerEvent) => {
+      const anchor = anchorFromEvent(event);
+      if (anchor) cancelPrefetch(anchor.href);
+    };
+    const onFocusIn = (event: FocusEvent) => {
+      const anchor = anchorFromEvent(event);
+      if (anchor) prefetchRoute(anchor.href);
+    };
+    const onTouchStart = (event: TouchEvent) => {
+      const anchor = anchorFromEvent(event);
+      if (anchor) prefetchRoute(anchor.href);
+    };
+
+    document.addEventListener("pointerover", onPointerOver, { passive: true });
+    document.addEventListener("pointerout", onPointerOut, { passive: true });
+    document.addEventListener("focusin", onFocusIn);
+    document.addEventListener("touchstart", onTouchStart, { passive: true });
+    return () => {
+      document.removeEventListener("pointerover", onPointerOver);
+      document.removeEventListener("pointerout", onPointerOut);
+      document.removeEventListener("focusin", onFocusIn);
+      document.removeEventListener("touchstart", onTouchStart);
+    };
+  }, []);
+
+  return null;
 }
 
 function RedirectWithParam({ to }: { to: (params: Record<string, string>) => string }) {
@@ -102,6 +128,38 @@ function ScrollToTop() {
   }, [location]);
 
   return null;
+}
+
+function DeferredToaster() {
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    if (enabled) return;
+
+    let timeoutId: ReturnType<typeof globalThis.setTimeout> | undefined;
+    let idleId: number | undefined;
+    const enable = () => setEnabled(true);
+    const scheduleIdle = () => {
+      if ("requestIdleCallback" in window) {
+        idleId = window.requestIdleCallback(enable, { timeout: 5000 });
+      } else {
+        timeoutId = globalThis.setTimeout(enable, 2500);
+      }
+    };
+
+    timeoutId = globalThis.setTimeout(scheduleIdle, 1500);
+    return () => {
+      if (timeoutId) globalThis.clearTimeout(timeoutId);
+      if (idleId !== undefined) window.cancelIdleCallback(idleId);
+    };
+  }, [enabled]);
+
+  if (!enabled) return null;
+  return (
+    <Suspense fallback={null}>
+      <Toaster />
+    </Suspense>
+  );
 }
 
 function PublicRoutes() {
@@ -279,19 +337,18 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <SiteSettingsProvider>
-          <AuthProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-              <CountryProvider>
-                <ScrollToTop />
-                <Router />
-              </CountryProvider>
-            </WouterRouter>
-          </AuthProvider>
-          <Toaster />
-        </SiteSettingsProvider>
-      </TooltipProvider>
+      <SiteSettingsProvider>
+        <AuthProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <CountryProvider>
+              <ScrollToTop />
+              <NavigationPrefetcher />
+              <Router />
+            </CountryProvider>
+          </WouterRouter>
+        </AuthProvider>
+        <DeferredToaster />
+      </SiteSettingsProvider>
     </QueryClientProvider>
   );
 }

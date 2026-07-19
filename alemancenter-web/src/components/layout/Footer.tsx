@@ -103,7 +103,7 @@ function FooterLink({ href, children }: { href: string; children: React.ReactNod
     <li>
       <Link
         href={href}
-        className="text-slate-500 hover:text-blue-700 transition-colors font-semibold dark:text-slate-400 dark:hover:text-blue-400"
+        className="text-slate-700 hover:text-blue-700 transition-colors font-semibold dark:text-slate-300 dark:hover:text-blue-400"
       >
         {children}
       </Link>
@@ -152,16 +152,16 @@ export function Footer() {
               )}
               <div>
                 <p className="text-xl font-black text-slate-950 dark:text-white">{siteName}</p>
-                <p className="text-xs font-semibold text-slate-400">بوابة المستقبل التعليمية</p>
+                <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">بوابة المستقبل التعليمية</p>
               </div>
             </Link>
 
-            <p className="mb-6 max-w-sm text-sm font-semibold leading-7 text-slate-500 dark:text-slate-400">
+            <p className="mb-6 max-w-sm text-sm font-semibold leading-7 text-slate-700 dark:text-slate-300">
               {siteDescription}
             </p>
 
             {/* Contact info */}
-            <div className="mb-6 space-y-2 text-sm text-slate-500 dark:text-slate-400">
+            <div className="mb-6 space-y-2 text-sm text-slate-700 dark:text-slate-300">
               {settings.contact_email && (
                 <a
                   href={`mailto:${settings.contact_email}`}
@@ -200,7 +200,7 @@ export function Footer() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={label}
-                    className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-all duration-200 hover:scale-105 hover:bg-blue-700 hover:text-white dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-blue-700 dark:hover:text-white"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-700 transition-all duration-200 hover:scale-105 hover:bg-blue-700 hover:text-white dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-blue-700 dark:hover:text-white"
                   >
                     <Icon />
                   </a>
@@ -214,7 +214,7 @@ export function Footer() {
             <FooterHeading>روابط سريعة</FooterHeading>
             <ul className="space-y-3 text-sm">
               <FooterLink href={routes.lessonList(country)}>الدروس والمواد</FooterLink>
-              <FooterLink href="/grades">الصفوف الدراسية</FooterLink>
+              <FooterLink href={routes.lessonList(country)}>الصفوف الدراسية</FooterLink>
               <FooterLink href="/calendar">التقويم الدراسي</FooterLink>
               <FooterLink href="/teacher-subscription">اشتراكات المعلمين</FooterLink>
               <FooterLink href="/contact-us">اتصل بنا</FooterLink>
@@ -238,7 +238,7 @@ export function Footer() {
         </div>
 
         {/* ── Bottom bar ── */}
-        <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-slate-100 pt-8 text-sm text-slate-400 sm:flex-row dark:border-slate-800 dark:text-slate-500">
+        <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-slate-100 pt-8 text-sm text-slate-600 sm:flex-row dark:border-slate-800 dark:text-slate-300">
           <p className="font-semibold">
             © {new Date().getFullYear()} {siteName}. جميع الحقوق محفوظة.
           </p>

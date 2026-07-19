@@ -57,11 +57,23 @@ async function tryRefreshToken(): Promise<boolean> {
         const res = await fetch(`${API_BASE}/auth/refresh`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
         });
         if (!res.ok) return false;
-        const json = await res.json();
-        const data = json.data ?? json;
-        const accessToken = data.access_token ?? data.token;
+        const json = await res.json().catch(() => null);
+        if (!json || typeof json !== "object") return false;
+
+        // Auth responses from the Go backend are not fully uniform: login and
+        // some refresh responses expose the token at the top level while other
+        // deployments wrap it in `data`. Accept both shapes so a hard reload
+        // can always rebuild the in-memory access token from the httpOnly
+        // refresh cookie.
+        const nested = (json as { data?: Record<string, unknown> }).data;
+        const accessToken =
+          (json as { access_token?: string }).access_token ??
+          (json as { token?: string }).token ??
+          (nested?.access_token as string | undefined) ??
+          (nested?.token as string | undefined);
         if (!accessToken) return false;
         setTokens(accessToken);
         return true;
@@ -97,6 +109,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     return fetch(`${API_BASE}${path}`, {
       ...rest,
       headers: finalHeaders,
+      credentials: rest.credentials ?? "same-origin",
       body: isForm ? (body as FormData) : body !== undefined ? JSON.stringify(body) : undefined,
     });
   };

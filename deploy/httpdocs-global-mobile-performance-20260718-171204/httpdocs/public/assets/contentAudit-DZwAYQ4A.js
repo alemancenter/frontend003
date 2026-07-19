@@ -1,0 +1,11 @@
+import{c as i,l as a,m as o,p as d}from"./index-DyAfD22d.js";/**
+ * @license lucide-react v1.24.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const c=[["circle",{cx:"12",cy:"12",r:"10",key:"1mglay"}],["rect",{x:"9",y:"9",width:"6",height:"6",rx:"1",key:"1ssd4o"}]],h=i("circle-stop",c);/**
+ * @license lucide-react v1.24.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const r=[["path",{d:"M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z",key:"10ikf1"}]],b=i("play",r);function n(t={}){return t.country?{...t,...d(String(t.country))}:t}const y={runStart:(t={})=>a.post(`/dashboard/content-audit/run${o(n(t))}`),listRuns:(t={})=>a.get(`/dashboard/content-audit/runs${o(n(t))}`),showRun:(t,e={})=>a.get(`/dashboard/content-audit/runs/${t}${o(n(e))}`),listFindings:(t,e={})=>a.get(`/dashboard/content-audit/runs/${t}/findings${o(n(e))}`),exportRunCsvUrl:(t,e={})=>`/api/dashboard/content-audit/runs/${t}/export${o(n(e))}`,adsenseReadiness:(t={})=>a.get(`/dashboard/content-audit/adsense-readiness${o(n(t))}`),listQualityBatches:(t={})=>a.get(`/dashboard/content-audit/ai/batch-jobs${o(n(t))}`),showQualityBatch:(t,e={})=>a.get(`/dashboard/content-audit/ai/batch-jobs/${t}${o(n(e))}`),startQualityBatch:(t,e={})=>{const s=e.country?{...t,country_code:e.country,...d(e.country)}:t;return a.post(`/dashboard/content-audit/ai/batch-jobs${o(n(e))}`,s)},cancelQualityBatch:(t,e={})=>a.post(`/dashboard/content-audit/ai/batch-jobs/${t}/cancel${o(n(e))}`),reviewQueue:(t={})=>a.get(`/dashboard/content-audit/ai/review-queue${o(n(t))}`),modelCostSummary:(t={})=>a.get(`/dashboard/content-audit/ai/model-costs${o(n(t))}`),analyzeWithAI:t=>a.post("/dashboard/content-audit/ai/analyze",t),showAIDecision:t=>a.get(`/dashboard/content-audit/ai/decisions/${t}`),latestAIDecision:(t,e)=>a.get(`/dashboard/content-audit/ai/decision/${t}/${e}`),createFixPreview:t=>a.post("/dashboard/content-audit/ai/fix-preview",t),showFixPreview:t=>a.get(`/dashboard/content-audit/ai/fix-preview/${t}`),applyFix:t=>a.post("/dashboard/content-audit/ai/apply-fix",t),rejectFix:t=>a.post("/dashboard/content-audit/ai/reject-fix",t)};export{h as C,b as P,y as a};

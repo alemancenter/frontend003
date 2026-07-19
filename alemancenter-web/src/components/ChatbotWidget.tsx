@@ -93,8 +93,10 @@ export function ChatbotWidget() {
         <Button
           onClick={() => setIsOpen(true)}
           className="fixed bottom-6 left-6 h-14 w-14 rounded-full shadow-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-transform hover:scale-105 z-50 flex items-center justify-center p-0"
+          aria-label="فتح المساعد الذكي"
         >
           <MessageSquare className="h-6 w-6" />
+          <span className="sr-only">فتح المساعد الذكي</span>
         </Button>
       )}
 
@@ -115,8 +117,10 @@ export function ChatbotWidget() {
                 size="icon"
                 className="text-primary-foreground hover:bg-primary/80 h-8 w-8"
                 onClick={() => setIsOpen(false)}
+                aria-label="إغلاق المساعد الذكي"
               >
                 <Minus className="h-4 w-4" />
+                <span className="sr-only">إغلاق المساعد الذكي</span>
               </Button>
             </div>
           </div>
@@ -181,17 +185,21 @@ export function ChatbotWidget() {
                             type="button"
                             onClick={() => handleFeedback(m, "helpful")}
                             className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition hover:bg-emerald-100 hover:text-emerald-600 dark:hover:bg-emerald-900/30"
+                            aria-label="تقييم الإجابة كمفيدة"
                             title="مفيدة"
                           >
                             <ThumbsUp className="h-3 w-3" />
+                            <span className="sr-only">تقييم الإجابة كمفيدة</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => handleFeedback(m, "not_helpful")}
                             className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition hover:bg-red-100 hover:text-red-500 dark:hover:bg-red-900/30"
+                            aria-label="تقييم الإجابة كغير مفيدة"
                             title="غير مفيدة"
                           >
                             <ThumbsDown className="h-3 w-3" />
+                            <span className="sr-only">تقييم الإجابة كغير مفيدة</span>
                           </button>
                         </>
                       )}
@@ -227,8 +235,10 @@ export function ChatbotWidget() {
                 size="icon"
                 disabled={sendMessage.isPending || !input.trim()}
                 className="rounded-full shrink-0"
+                aria-label="إرسال الرسالة"
               >
                 <Send className="h-4 w-4 rtl:-scale-x-100" />
+                <span className="sr-only">إرسال الرسالة</span>
               </Button>
             </form>
           </div>

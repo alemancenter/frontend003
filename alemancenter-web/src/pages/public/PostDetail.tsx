@@ -141,7 +141,7 @@ export function PostDetail() {
   const { data: comments, refetch: refetchComments } = useQuery({
     queryKey: ["post-comments", country, id],
     queryFn: () => commentsApi.list(country, "posts", { commentable_id: Number(id) }),
-    enabled: !!id,
+    enabled: Boolean(post && id),
   });
 
   const incrementView = useMutation({

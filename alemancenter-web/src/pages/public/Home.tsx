@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Link } from "wouter";
 import { articlesApi, categoriesApi } from "@/lib/api/content";
 import { academicApi } from "@/lib/api/academic";
-import { AdUnit } from "@/components/ads/AdUnit";
+import type { AdUnitProps } from "@/components/ads/AdUnit";
 import { Button } from "@/components/ui/button";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { useSeo, websiteJsonLd, organizationJsonLd } from "@/lib/seo";
@@ -31,6 +32,27 @@ import {
 } from "lucide-react";
 import { useCountry } from "@/hooks/use-country";
 import { routes } from "@/lib/country";
+
+const AdUnit = lazy(() =>
+  import("@/components/ads/AdUnit").then((module) => ({ default: module.AdUnit })),
+);
+
+function DeferredAdUnit(props: AdUnitProps) {
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setEnabled(true), 7000);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  if (!enabled) return null;
+
+  return (
+    <Suspense fallback={null}>
+      <AdUnit {...props} />
+    </Suspense>
+  );
+}
 
 /* ─── Constants ─────────────────────────────────────────────────────────────── */
 
@@ -144,9 +166,24 @@ export function Home() {
     ],
   });
 
-  const { data: articles,   isLoading: loadingArticles   } = useQuery({ queryKey: ["latest-articles", country], queryFn: () => articlesApi.list({ per_page: 6, country }) });
-  const { data: grades,     isLoading: loadingGrades     } = useQuery({ queryKey: ["grades",          country], queryFn: () => academicApi.listGrades(country) });
-  const { data: categories, isLoading: loadingCategories } = useQuery({ queryKey: ["categories",      country], queryFn: () => categoriesApi.list(country) });
+  // Start primary home data immediately. The previous 1.2s + idle delay made
+  // the page feel slow even when the API itself was fast. React Query caching
+  // keeps repeat visits cheap.
+  const { data: articles, isLoading: loadingArticles } = useQuery({
+    queryKey: ["latest-articles", country],
+    queryFn: () => articlesApi.list({ per_page: 6, country }),
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: grades, isLoading: loadingGrades } = useQuery({
+    queryKey: ["grades", country],
+    queryFn: () => academicApi.listGrades(country),
+    staleTime: 30 * 60 * 1000,
+  });
+  const { data: categories, isLoading: loadingCategories } = useQuery({
+    queryKey: ["categories", country],
+    queryFn: () => categoriesApi.list(country),
+    staleTime: 15 * 60 * 1000,
+  });
 
   return (
     <div className="flex flex-col" dir="rtl">
@@ -182,7 +219,7 @@ export function Home() {
             </h1>
 
             {/* Sub */}
-            <p className="max-w-lg text-base font-semibold leading-8 text-white/70 sm:text-lg">
+            <p className="max-w-lg text-base font-semibold leading-8 text-white/85 sm:text-lg">
               آلاف الملفات الدراسية، الملخصات، الاختبارات وأوراق العمل — منظمة حسب الصف والمادة والدولة، جاهزة للتحميل في ثوانٍ.
             </p>
 
@@ -194,7 +231,7 @@ export function Home() {
                   استكشف المحتوى
                 </span>
               </Link>
-              <Link href="/grades">
+              <Link href={routes.lessonList(country)}>
                 <span className="inline-flex h-13 items-center gap-2.5 rounded-2xl border border-white/20 bg-white/10 px-7 py-3.5 text-base font-black text-white backdrop-blur-sm transition hover:bg-white/15 active:scale-95">
                   <GraduationCap className="h-5 w-5" />
                   اختر صفك الدراسي
@@ -251,12 +288,12 @@ export function Home() {
             <h2 className="text-2xl font-black text-slate-900 dark:text-white sm:text-3xl">
               تصفح حسب الصف الدراسي
             </h2>
-            <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
+            <p className="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-300">
               ابدأ من صفك للوصول إلى جميع المواد المتاحة
             </p>
           </div>
-          <Link href="/grades">
-            <span className="hidden items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 transition hover:border-blue-100 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 sm:flex">
+          <Link href={routes.lessonList(country)} className="hidden sm:block" aria-label="عرض جميع الصفوف الدراسية">
+            <span className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 transition hover:border-blue-100 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
               عرض الكل <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
             </span>
           </Link>
@@ -274,7 +311,7 @@ export function Home() {
               const g = GRADE_GRADIENTS[i % GRADE_GRADIENTS.length];
               const num = extractGradeNumber(grade.grade_name, i);
               return (
-                <Link key={grade.id} href={`/grades/${grade.id}`}>
+                <Link key={grade.id} href={routes.lessonDetail(country, grade.id)}>
                   <div
                     className="group relative flex min-h-[110px] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl px-2 py-4 text-center shadow-sm transition-all active:scale-[0.97] lg:hover:-translate-y-1 lg:hover:shadow-xl"
                     style={{ background: `linear-gradient(145deg,${g.from},${g.to})` }}
@@ -302,7 +339,7 @@ export function Home() {
 
       {/* Ad */}
       <div className="mx-auto w-full max-w-[1540px] px-4 pt-10 sm:px-6 md:px-8">
-        <AdUnit page="home" position={1} className="rounded-2xl overflow-hidden" />
+        <DeferredAdUnit page="home" position={1} className="rounded-2xl overflow-hidden" />
       </div>
 
       {/* ══════════════════════ CATEGORIES ═══════════════════════════════════════ */}
@@ -312,21 +349,23 @@ export function Home() {
             <h2 className="text-2xl font-black text-slate-900 dark:text-white sm:text-3xl">
               الأقسام التعليمية
             </h2>
-            <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
+            <p className="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-300">
               تصفح المحتوى حسب الموضوع أو المادة
             </p>
           </div>
-          <Link
+          <a
             href={
               categories && categories.length > 0
                 ? routes.postsCategory(country, categories[0].slug || categories[0].id)
                 : routes.postsList(country)
             }
+            className="hidden sm:block"
+            aria-label="عرض جميع الأقسام التعليمية"
           >
-            <span className="hidden items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 transition hover:border-blue-100 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 sm:flex">
+            <span className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 transition hover:border-blue-100 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
               جميع الأقسام <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
             </span>
-          </Link>
+          </a>
         </div>
 
         {loadingCategories ? (
@@ -375,7 +414,7 @@ export function Home() {
 
       {/* Ad */}
       <div className="mx-auto w-full max-w-[1540px] px-4 pt-10 sm:px-6 md:px-8">
-        <AdUnit page="home" position={2} className="rounded-2xl overflow-hidden" />
+        <DeferredAdUnit page="home" position={2} className="rounded-2xl overflow-hidden" />
       </div>
 
       {/* ══════════════════════ KHADMATK PROMO ═══════════════════════════════ */}
@@ -397,7 +436,7 @@ export function Home() {
 
             <div className="relative z-10">
               <div className="mb-4 flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-1 text-xs font-black text-white">
+                <span className="inline-flex items-center gap-2 rounded-full bg-emerald-700 px-3 py-1 text-xs font-black text-white">
                   <Sparkles className="h-3.5 w-3.5" />
                   إعلان مميز
                 </span>
@@ -469,15 +508,15 @@ export function Home() {
             <h2 className="text-2xl font-black text-slate-900 dark:text-white sm:text-3xl">
               أحدث المقالات والملفات
             </h2>
-            <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
+            <p className="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-300">
               محتوى جديد يُضاف يومياً من أفضل المعلمين
             </p>
           </div>
-          <Link href="/articles">
-            <span className="hidden items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 transition hover:border-blue-100 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 sm:flex">
+          <a href="/articles" className="hidden sm:block" aria-label="تصفح جميع المقالات والملفات">
+            <span className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 transition hover:border-blue-100 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
               تصفح المزيد <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
             </span>
-          </Link>
+          </a>
         </div>
 
         {loadingArticles ? (
@@ -503,7 +542,7 @@ export function Home() {
                       {/* Tags */}
                       <div className="flex flex-wrap gap-1.5">
                         {article.grade_level && (
-                          <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                          <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
                             {article.grade_level}
                           </span>
                         )}
@@ -520,12 +559,12 @@ export function Home() {
                       </h3>
 
                       {/* Excerpt */}
-                      <p className="flex-1 text-[13px] font-semibold leading-relaxed text-slate-500 line-clamp-2 dark:text-slate-400">
+                      <p className="flex-1 text-[13px] font-semibold leading-relaxed text-slate-700 line-clamp-2 dark:text-slate-300">
                         {article.meta_description || "اقرأ المقال لمزيد من التفاصيل حول هذا الموضوع التعليمي."}
                       </p>
 
                       {/* Footer meta */}
-                      <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-[11px] font-bold text-slate-400 dark:border-slate-700 dark:text-slate-500">
+                      <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-[11px] font-bold text-slate-600 dark:border-slate-700 dark:text-slate-300">
                         <span className="flex items-center gap-1">
                           <Eye className="h-3 w-3" />
                           {article.visit_count?.toLocaleString("ar-JO")} مشاهدة

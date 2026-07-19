@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
+    <!--
+      Content Security Policy
+      - script-src: self + Google/Facebook SDKs + AdSense/GTM. 'unsafe-inline'
+        is required by Vite HMR in development and Radix/Tailwind in production.
+        AdSense's adsbygoogle.js loads several Google sub-origins at runtime
+        (ad rendering, consent messaging, ad-traffic-quality attribution) —
+        all listed explicitly here rather than relaxed to a wildcard.
+      - style-src: 'unsafe-inline' is required by Tailwind CSS utility classes
+        injected at runtime and by Radix UI.
+      - connect-src: same-origin API proxy, plus the Google ad-serving origins
+        adsbygoogle.js calls directly via fetch/XHR/beacon (blocked with just
+        'self', which is what caused the CSP console warnings).
+      - object-src / base-uri: locked down to prevent plugin injection / base-tag hijack.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="
+      default-src 'self';
+      script-src 'self' 'unsafe-inline'
+        https://accounts.google.com
+        https://connect.facebook.net
+        https://pagead2.googlesyndication.com
+        https://googleads.g.doubleclick.net
+        https://tpc.googlesyndication.com
+        https://www.google.com
+        https://www.gstatic.com
+        https://www.googletagmanager.com
+        https://www.googletagservices.com
+        https://fundingchoicesmessages.google.com
+        https://ep1.adtrafficquality.google
+        https://ep2.adtrafficquality.google
+        https://adservice.google.com;
+      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+      font-src 'self' https://fonts.gstatic.com data:;
+      img-src 'self' data: https:;
+      connect-src 'self'
+        https://pagead2.googlesyndication.com
+        https://googleads.g.doubleclick.net
+        https://tpc.googlesyndication.com
+        https://www.google.com
+        https://fundingchoicesmessages.google.com
+        https://ep1.adtrafficquality.google
+        https://ep2.adtrafficquality.google;
+      frame-src
+        https://accounts.google.com
+        https://www.facebook.com
+        https://googleads.g.doubleclick.net
+        https://tpc.googlesyndication.com
+        https://www.google.com
+        https://fundingchoicesmessages.google.com
+        https://ep2.adtrafficquality.google;
+      object-src 'none';
+      base-uri 'self';
+      form-action 'self';
+    " />
+    <title>موقع الإيمان التعليمي</title>
+    <meta name="description" content="المنصة التعليمية الأولى في الأردن والشرق الأوسط" />
+    <meta name="robots" content="index, follow" />
+    <meta property="og:title" content="موقع الإيمان التعليمي" />
+    <meta property="og:description" content="المنصة التعليمية الأولى في الأردن والشرق الأوسط" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="موقع الإيمان التعليمي" />
+    <meta name="twitter:description" content="المنصة التعليمية الأولى في الأردن والشرق الأوسط" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      Fonts are loaded non-render-blocking: the stylesheet is fetched with
+      media="print" (so it never blocks first paint) then flipped to media="all"
+      once loaded. Text paints immediately in the metric-matched fallback
+      (see index.css) and swaps to Cairo with minimal layout shift. Weights are
+      trimmed to the ones actually used to shrink the font payload.
+    -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Tajawal:wght@400;700&display=optional"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Tajawal:wght@400;700&display=optional"
+      />
+    </noscript>
+    <style>
+      /* Instant first paint for the SPA shell (before the JS bundle renders),
+         so FCP registers immediately instead of waiting on the full app bundle
+         to download+parse. The brand TEXT (not just the spinner) is what makes
+         this a *contentful* paint. */
+      #app-shell{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#0f172a;color:#e2e8f0;font-family:system-ui,"Segoe UI",Tahoma,Arial,sans-serif}
+      #app-shell .t{font-size:22px;font-weight:800;letter-spacing:-.01em}
+      #app-shell .s{width:40px;height:40px;border-radius:9999px;border:3px solid rgba(255,255,255,.15);border-top-color:#6366f1;animation:app-spin .7s linear infinite}
+      @keyframes app-spin{to{transform:rotate(360deg)}}
+      @media (prefers-reduced-motion:reduce){#app-shell .s{animation:none}}
+    </style>
+    <script type="module" crossorigin src="/assets/index-DUf_p48f.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/router-DJoQQSNN.js">
+    <link rel="modulepreload" crossorigin href="/assets/query-COdABIme.js">
+    <link rel="modulepreload" crossorigin href="/assets/radix-CtFBTss0.js">
+    <link rel="modulepreload" crossorigin href="/assets/icons-CTvEE3FB.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-xcM2W3UC.css">
+  </head>
+  <body>
+    <div id="root">
+      <div id="app-shell">
+        <div class="t">موقع الإيمان التعليمي</div>
+        <div class="s"></div>
+      </div>
+    </div>
+  </body>
+</html>
