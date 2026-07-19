@@ -135,7 +135,9 @@ export function Navbar() {
                   src={logoPath}
                   srcSet={imgSrcSet(settings.site_logo, 48)}
                   sizes="48px"
-                  alt={siteName}
+                  // Decorative: the site name text sits right beside it in the same
+                  // link, so an alt would be read out twice by screen readers.
+                  alt=""
                   className="h-10 w-10 rounded-2xl object-contain sm:h-12 sm:w-12"
                   width={48}
                   height={48}
@@ -162,7 +164,7 @@ export function Navbar() {
               <p className="truncate text-base font-black leading-tight tracking-tight text-slate-950 dark:text-white sm:text-[22px]">
                 {siteName}
               </p>
-              <p className="hidden truncate text-[12px] font-semibold leading-tight text-slate-500 dark:text-slate-300 sm:block">
+              <p className="hidden truncate text-[12px] font-semibold leading-tight text-slate-600 dark:text-slate-300 sm:block">
                 {siteSubtitle}
               </p>
             </div>
